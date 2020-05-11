@@ -13,14 +13,15 @@ import dlib
 
 # процесс формирования Bio QR-кода
 # 1. Получить изображение лица (ИЛ)
-def load_face_image(path_to_img):
+def load_image(path_to_img):
     u"""
     Загружает изображение по указанному пути
     :param path_to_img: Путь к изображению
     :return: Изображение img
     """
     img = cv2.imread(path_to_img)
-    return img
+    image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return image
 
 
 # 2. Нормализовать размер ИЛ
@@ -36,8 +37,12 @@ def make_square_img(image, size=None, silent=True):
     shape = image.shape
     h = shape[0]
     w = shape[1]
-    # Если изображение уже имеет пропорции 1:1, то возвращаем его же
+    # Если изображение уже имеет пропорции 1:1..
     if h == w and not size:
+        # Если размер нечетный, то уменьшаем изображение на 1 пиксель
+        if h % 2:
+            return cv2.resize(image, (h-1, h-1))
+        # Иначе возвращаем исходное изображение
         return image
 
     # Определяем новые размеры по большей стороне
@@ -77,7 +82,8 @@ def make_square_img(image, size=None, silent=True):
         value=[255, 255, 255]  # Заполняем белым цветом
     )
     if not silent:
-        cv2.imshow("Filled image", img_filled)
+        to_show = cv2.cvtColor(img_filled, cv2.COLOR_RGB2BGR)
+        cv2.imshow("Filled image", to_show)
         cv2.waitKey(0)
     return img_filled
 
@@ -104,7 +110,7 @@ def generate_layers_combination(image):
     """
     # 1. Получаем значения компонент r и g для этого изображения
     G = image[:, :, 1]
-    R = image[:, :, 2]
+    R = image[:, :, 0]
     # 2. Получаем индекс середины изображения
     middle = get_middle_coords(image)
     width = image.shape[1]
@@ -128,8 +134,8 @@ def generate_qr_pip(photo1, photo2, silent=True):
     qr_numpy = np.array(qr_img)
     if qr_numpy.dtype == bool:
         qr_numpy = qr_numpy.astype(np.uint8) * 255
-    cv2_qr = cv2.cvtColor(qr_numpy, cv2.COLOR_RGB2GRAY)
-    qr_info = cv2.resize(cv2_qr, (MQR, MQR), interpolation=cv2.INTER_LINEAR)
+    # cv2_qr = cv2.cvtColor(qr_numpy, cv2.COLOR_RGB2GRAY)
+    qr_info = cv2.resize(qr_numpy, (MQR, MQR), interpolation=cv2.INTER_LINEAR)
     qr_info = make_square_img(qr_info, silent=silent, size=M)
 
     # 4. Выбираем компоненты (для данной реализации для кода PIP)
@@ -154,6 +160,20 @@ def generate_qr_pip(photo1, photo2, silent=True):
     return result
 
 
+def form_bio_qr():
+    # 1. Получить изображение лица (ИЛ)
+    img_path = "test_images/test" + str(10) + ".jpg"
+    image = load_image(img_path)
+    # 2. Нормализовать размер ИЛ
+    image_square = make_square_img(image, silent=False)
+    # 3. Определить координаты половин изображения лица
+    # 4. Создать слой-комбинацию из левой половины слоя R и правой слоя G
+    rg = generate_layers_combination(image_square)
+    # 5. Сгенерировать QR-код со слоями R=комбинация из п. 4, G=QR-код, B=слой B ИЛ
+    qr_result = generate_qr_pip(rg, image_square[:, :, 2], silent=False)
+    return qr_result
+
+
 # процесс декодирования Bio QR-кода
 def recreate_layers_RG(rg_layer):
     u"""
@@ -176,7 +196,7 @@ def recreate_layers_RG(rg_layer):
     return fullR, fullG
 
 
-# 1. Получить изображение Bio QR-кода (см. load_face_image)
+# 1. Получить изображение Bio QR-кода (см. load_image)
 def decode_qr_pip(qr_image):
     u"""
     Проводит декодирование PIP QR-кода и восстанавливает исходное изображение лица
@@ -193,10 +213,15 @@ def decode_qr_pip(qr_image):
     # соответствующие цветные слои ИЛ
     restoredR, restoredG = recreate_layers_RG(RG)
     # 5. Разместить восстановленные слои R и G вместе со слоем B из Bio QR-кода
+    # Обратный порядок слоев, чтобы imshow корректно отобразил
     result = np.zeros((height, width, 3), np.uint8)
-    result[:, :, 0] = restoredR
+    result[:, :, 2] = restoredR
     result[:, :, 1] = restoredG
-    result[:, :, 2] = B
+    result[:, :, 0] = B
     # 6. Выполнить сведение полученных слоев и сформировать результирующее изображение
     cv2.imshow("Restored image", result)
     cv2.waitKey(0)
+
+
+qr_image = form_bio_qr()
+decode_qr_pip(qr_image)
