@@ -153,11 +153,50 @@ def generate_qr_pip(photo1, photo2, silent=True):
 
     return result
 
+
 # процесс декодирования Bio QR-кода
-# 1. Получить изображение Bio QR-кода
-# 2. Разбить изображение на слои
-# 3. Выделить половины из слоя R
-# 4. Провести зеркальное отражение каждой из половин и сформировать
-# соответствующие цветные слои ИЛ
-# 5. Разместить восстановленные слои R и G вместе со слоем B из Bio QR-кода
-# 6. Выполнить сведение полученных слоев и сформировать результирующее изображение
+def recreate_layers_RG(rg_layer):
+    u"""
+    Воссоздает слои R и G из слоя RG
+    :param rg_layer: слой RG (левая часть со значениями R, правая - G)
+    :return: восстановленные слои R и G
+    """
+    # 2. Сделаем отражение слоя по вертикали
+    # При вертикальном отражении по оси Y в левой части слоя flipped
+    # станет G слой, а в правой - R слой
+    flipped = cv2.flip(rg_layer, 1)
+    # 3. Получим данные об индексе середины изображения и его ширине
+    middle = get_middle_coords(rg_layer)
+    width = rg_layer.shape[1]
+    # 4. Выделим половины изображений из слоев
+    copyR = rg_layer[:, 0:middle]
+    copyG = rg_layer[:, middle:width]
+    fullR = np.concatenate((copyR, flipped[:, middle:width]), axis=1)
+    fullG = np.concatenate((flipped[:, 0:middle], copyG), axis=1)
+    return fullR, fullG
+
+
+# 1. Получить изображение Bio QR-кода (см. load_face_image)
+def decode_qr_pip(qr_image):
+    u"""
+    Проводит декодирование PIP QR-кода и восстанавливает исходное изображение лица
+    :param qr_image: исходный BIO QR-код типа PIP
+    :return:
+    """
+    height, width, _ = qr_image.shape
+    # 2. Разбить изображение на слои
+    RG = qr_image[:, :, 0]
+    qr_info = qr_image[:, :, 1]
+    B = qr_image[:, :, 2]
+    # 3. Выделить половины из слоя R
+    # 4. Провести зеркальное отражение каждой из половин и сформировать
+    # соответствующие цветные слои ИЛ
+    restoredR, restoredG = recreate_layers_RG(RG)
+    # 5. Разместить восстановленные слои R и G вместе со слоем B из Bio QR-кода
+    result = np.zeros((height, width, 3), np.uint8)
+    result[:, :, 0] = restoredR
+    result[:, :, 1] = restoredG
+    result[:, :, 2] = B
+    # 6. Выполнить сведение полученных слоев и сформировать результирующее изображение
+    cv2.imshow("Restored image", result)
+    cv2.waitKey(0)
