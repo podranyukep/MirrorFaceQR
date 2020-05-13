@@ -10,6 +10,7 @@ import qrcode
 import numpy as np
 import dlib
 from matplotlib import pyplot as plt
+from tabulate import tabulate
 
 
 # процесс формирования Bio QR-кода
@@ -316,6 +317,34 @@ def calculate_distance_between_landmarks(first, second):
     return dist
 
 
+def calculate_antro(landmarks):
+    lm = {
+        'x': [point.x for point in landmarks],
+        'y': [point.y for point in landmarks]
+    }
+    top_lip = lm['y'][50] if lm['y'][50] >= lm['y'][52] else lm['y'][52]
+    return {
+        'height': max(lm['y']) - min(lm['y']),
+        'width': max(lm['x']) - min(lm['x']),
+        'eye_width': abs(lm['x'][36] - lm['x'][39]),
+        'nose_width': abs(lm['x'][31] - lm['x'][35]),
+        'lips_width': abs(lm['x'][48] - lm['x'][54]),
+        'nose_height': abs(lm['y'][33] - lm['y'][27]),
+        'lips_height': abs(top_lip - lm['y'][57])
+    }
+
+
+def detect_antro_diff(landmarks1, landmarks2):
+    face1 = calculate_antro(landmarks1)
+    face2 = calculate_antro(landmarks2)
+    diff_dict = {}
+    for k in face1.keys():
+        delta = abs(face1[k] - face2[k])
+        diff_dict[k] = [face1[k], face2[k], delta,
+                        round(delta/min(face1[k], face2[k]), 3)*100]
+    return diff_dict
+
+
 normal_image, qr_image = form_bio_qr()
 restored = decode_qr_pip(qr_image)
 normal_qr = np.concatenate((normal_image, qr_image), axis=1)
@@ -333,6 +362,11 @@ points, det = find_face_landmarks(normal_image)
 points_rest, det_rest = find_face_landmarks(restored)
 sum_distance = round(calculate_distance_between_landmarks(points, points_rest), 3)
 print(u'Сумма Евклидовых расстояний между антропометрическими точками: {s}'.format(s=sum_distance))
+diff = detect_antro_diff(points, points_rest)
+columns = [u'Высота лица', u'Ширина лица', u'Ширина глазной щели', u'Ширина носа',
+           u'Ширина губ', u'Высота носа', u'Высота от нижней губы до верхней']
+rows = [u'Оригинал', u'Восстановленное', u'Разница', u'Разница %']
+print(tabulate(diff, headers=columns, showindex=rows))
 # Создаем объект окна dlib
 win = dlib.image_window()
 win.set_title("Finding face landmarks")
