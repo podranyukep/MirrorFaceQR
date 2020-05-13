@@ -253,6 +253,59 @@ def calculate_diff(orig, result):
     return percentage
 
 
+def find_face_landmarks(face_image):
+    u"""
+    Поиск ключевых точек лица
+    :param img_path: путь к изображению
+    :return:
+    """
+
+    # Загружаем ИЛ и конвертируем его в grayscale (полутона)
+    gray = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
+
+    # p - файл с уже обученной моделью для поиска ключевых точек на ИЛ (от dlib)
+    p = "shape_predictor_68_face_landmarks.dat"
+    # Инициализируем детектор лиц dlib (HOG-based)
+    # и создаем predictor для контуров лица на основе имеющейся модели
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor(p)
+
+    # Ищем лица в полутоновом изображении
+    # The 1 in the second argument indicates that we should
+    # upsample the image 1 time.
+    # This will make everything bigger and allow us to detect more faces.
+    rects = detector(gray, 1)
+    print(u"---------- Метод find_face_landmarks ----------")
+    # Выводим количество найденных лиц
+    print(u"Количество обнаруженных лиц: {}".format(len(rects)))
+
+    # Создаем объект окна dlib
+    win = dlib.image_window()
+    win.set_title("Finding face landmarks")
+    win.clear_overlay()
+    win.set_image(face_image)
+
+    points = None
+    landmark_detection = None
+    # Для каждого найденного лица..
+    for (i, rect) in enumerate(rects):
+        # Находим ключевые точки для каждого найденного лица
+        shape = predictor(gray, rect)
+
+        # Преобразовываем полученные точки в numpy список координат (x, y)
+        # shape = face_utils.shape_to_np(shape)
+        # Для всех полученных координат..
+        points = [shape.part(i) for i in range(0, 68)]
+        landmark_detection = dlib.full_object_detection(
+            rect, points
+        )
+        # Загружаем изображение в окно и добавляем сверху найденные
+        # ключевые точки лица
+        win.add_overlay(landmark_detection)
+    win.wait_until_closed()
+    return points, landmark_detection
+
+
 normal_image, qr_image = form_bio_qr()
 restored = decode_qr_pip(qr_image)
 normal_qr = np.concatenate((normal_image, qr_image), axis=1)
@@ -266,3 +319,5 @@ win.wait_until_closed()
 make_hist(normal_image, restored)
 diff = round(calculate_diff(normal_image, restored), 3)
 print(u'Восстановленное изображение отличается от оригинального на {p}%'.format(p=diff))
+points, det = find_face_landmarks(normal_image)
+points_rest, det_rest = find_face_landmarks(restored)
