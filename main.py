@@ -9,6 +9,7 @@ import cv2
 import qrcode
 import numpy as np
 import dlib
+from matplotlib import pyplot as plt
 
 
 # процесс формирования Bio QR-кода
@@ -227,6 +228,31 @@ def decode_qr_pip(qr_image, silent=True):
     return result
 
 
+def make_hist(orig, result):
+    color = ('b', 'g', 'r')
+    for i, col in enumerate(color):
+        histr = cv2.calcHist([orig], [i], None, [256], [0, 256])
+        histr_my = cv2.calcHist([result], [i], None, [256], [0, 256])
+
+        plt.plot(histr, color=col, label="{c} comp of Original".format(c=col))
+        plt.plot(histr_my, 'g--', color=col, label="{c} comp of Decoded".format(c=col))
+        plt.legend()
+        plt.xlim([0, 256])
+    plt.show()
+
+
+def calculate_diff(orig, result):
+    # --- take the absolute difference of the images ---
+    res = cv2.absdiff(orig, result)
+
+    # --- convert the result to integer type ---
+    res = res.astype(np.uint8)
+
+    # --- find percentage difference based on number of pixels that are not zero ---
+    percentage = (np.count_nonzero(res) * 100) / res.size
+    return percentage
+
+
 normal_image, qr_image = form_bio_qr()
 restored = decode_qr_pip(qr_image)
 normal_qr = np.concatenate((normal_image, qr_image), axis=1)
@@ -237,3 +263,6 @@ win.set_title("Result of BIO QR-code decoding")
 win.clear_overlay()
 win.set_image(summary)
 win.wait_until_closed()
+make_hist(normal_image, restored)
+diff = round(calculate_diff(normal_image, restored), 3)
+print(u'Восстановленное изображение отличается от оригинального на {p}%'.format(p=diff))
