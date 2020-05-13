@@ -253,7 +253,7 @@ def calculate_diff(orig, result):
     return percentage
 
 
-def find_face_landmarks(face_image):
+def find_face_landmarks(face_image, silent=True):
     u"""
     Поиск ключевых точек лица
     :param img_path: путь к изображению
@@ -279,12 +279,6 @@ def find_face_landmarks(face_image):
     # Выводим количество найденных лиц
     print(u"Количество обнаруженных лиц: {}".format(len(rects)))
 
-    # Создаем объект окна dlib
-    win = dlib.image_window()
-    win.set_title("Finding face landmarks")
-    win.clear_overlay()
-    win.set_image(face_image)
-
     points = None
     landmark_detection = None
     # Для каждого найденного лица..
@@ -299,11 +293,27 @@ def find_face_landmarks(face_image):
         landmark_detection = dlib.full_object_detection(
             rect, points
         )
-        # Загружаем изображение в окно и добавляем сверху найденные
-        # ключевые точки лица
+    # Загружаем изображение в окно и добавляем сверху найденные
+    # ключевые точки лица
+    if not silent and landmark_detection:
+        # Создаем объект окна dlib
+        win = dlib.image_window()
+        win.set_title("Finding face landmarks")
+        win.clear_overlay()
+        win.set_image(face_image)
         win.add_overlay(landmark_detection)
-    win.wait_until_closed()
+        win.wait_until_closed()
     return points, landmark_detection
+
+
+def calculate_distance_between_landmarks(first, second):
+    length = len(first)
+    dist = 0
+    for i in range(0, length):
+        p1 = first[i]
+        p2 = second[i]
+        dist += pow(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2), 0.5)
+    return dist
 
 
 normal_image, qr_image = form_bio_qr()
@@ -321,3 +331,14 @@ diff = round(calculate_diff(normal_image, restored), 3)
 print(u'Восстановленное изображение отличается от оригинального на {p}%'.format(p=diff))
 points, det = find_face_landmarks(normal_image)
 points_rest, det_rest = find_face_landmarks(restored)
+sum_distance = round(calculate_distance_between_landmarks(points, points_rest), 3)
+print(u'Сумма Евклидовых расстояний между антропометрическими точками: {s}'.format(s=sum_distance))
+# Создаем объект окна dlib
+win = dlib.image_window()
+win.set_title("Finding face landmarks")
+win.clear_overlay()
+win.set_image(normal_image)
+win.add_overlay(det)
+win.add_overlay(det_rest, color=dlib.rgb_pixel(255, 0, 0))
+win.wait_until_closed()
+dlib.rgb_pixel
