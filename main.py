@@ -165,13 +165,13 @@ def form_bio_qr():
     img_path = "test_images/test" + str(10) + ".jpg"
     image = load_image(img_path)
     # 2. Нормализовать размер ИЛ
-    image_square = make_square_img(image, silent=False)
+    image_square = make_square_img(image)
     # 3. Определить координаты половин изображения лица
     # 4. Создать слой-комбинацию из левой половины слоя R и правой слоя G
     rg = generate_layers_combination(image_square)
     # 5. Сгенерировать QR-код со слоями R=комбинация из п. 4, G=QR-код, B=слой B ИЛ
-    qr_result = generate_qr_pip(rg, image_square[:, :, 2], silent=False)
-    return qr_result
+    qr_result = generate_qr_pip(rg, image_square[:, :, 2])
+    return image_square, qr_result
 
 
 # процесс декодирования Bio QR-кода
@@ -197,7 +197,7 @@ def recreate_layers_RG(rg_layer):
 
 
 # 1. Получить изображение Bio QR-кода (см. load_image)
-def decode_qr_pip(qr_image):
+def decode_qr_pip(qr_image, silent=True):
     u"""
     Проводит декодирование PIP QR-кода и восстанавливает исходное изображение лица
     :param qr_image: исходный BIO QR-код типа PIP
@@ -213,15 +213,27 @@ def decode_qr_pip(qr_image):
     # соответствующие цветные слои ИЛ
     restoredR, restoredG = recreate_layers_RG(RG)
     # 5. Разместить восстановленные слои R и G вместе со слоем B из Bio QR-кода
-    # Обратный порядок слоев, чтобы imshow корректно отобразил
     result = np.zeros((height, width, 3), np.uint8)
-    result[:, :, 2] = restoredR
+    result[:, :, 0] = restoredR
     result[:, :, 1] = restoredG
-    result[:, :, 0] = B
+    result[:, :, 2] = B
     # 6. Выполнить сведение полученных слоев и сформировать результирующее изображение
-    cv2.imshow("Restored image", result)
-    cv2.waitKey(0)
+    if not silent:
+        win = dlib.image_window()
+        win.set_title("Recreated image")
+        win.clear_overlay()
+        win.set_image(result)
+        win.wait_until_closed()
+    return result
 
 
-qr_image = form_bio_qr()
-decode_qr_pip(qr_image)
+normal_image, qr_image = form_bio_qr()
+restored = decode_qr_pip(qr_image)
+normal_qr = np.concatenate((normal_image, qr_image), axis=1)
+summary = np.concatenate((normal_qr, restored), axis=1)
+# Создаем объект окна dlib
+win = dlib.image_window()
+win.set_title("Result of BIO QR-code decoding")
+win.clear_overlay()
+win.set_image(summary)
+win.wait_until_closed()
