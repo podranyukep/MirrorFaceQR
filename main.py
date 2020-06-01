@@ -13,6 +13,31 @@ from matplotlib import pyplot as plt
 from tabulate import tabulate
 
 
+def show_images(images, title):
+    # Создаем объект окна dlib
+    win = dlib.image_window()
+    win.set_title(title)
+    win.clear_overlay()
+    for_view = None
+    black_bar = None
+    for image in images:
+        if for_view is None:
+            for_view = image
+        else:
+            if black_bar is None:
+                H = for_view.shape[0]
+                if len(for_view.shape) > 2:
+                    shape = (H, 3, 3)
+                else:
+                    shape = (H, 3)
+                # Создаем разделитель
+                black_bar = np.zeros(shape, dtype=np.uint8)
+            for_view = np.concatenate((for_view, black_bar), axis=1)
+            for_view = np.concatenate((for_view, image), axis=1)
+    win.set_image(for_view)
+    win.wait_until_closed()
+
+
 # процесс формирования Bio QR-кода
 # 1. Получить изображение лица (ИЛ)
 def load_image(path_to_img):
@@ -83,10 +108,13 @@ def make_square_img(image, size=None, silent=True):
         borderType=cv2.BORDER_CONSTANT,
         value=[255, 255, 255]  # Заполняем белым цветом
     )
+    if size:
+        dsize = (size, size)
+    else:
+        dsize = (new_h, new_w)
+    img_filled = cv2.resize(img_filled, dsize)
     if not silent:
-        to_show = cv2.cvtColor(img_filled, cv2.COLOR_RGB2BGR)
-        cv2.imshow("Filled image", to_show)
-        cv2.waitKey(0)
+        show_images([img_filled], "Filled image")
     return img_filled
 
 
@@ -152,27 +180,23 @@ def generate_qr_pip(photo1, photo2, silent=True):
     result[:, :, 2] = photo2
 
     if not silent:
-        # Создаем объект окна dlib
-        win = dlib.image_window()
-        win.set_title("Forming BIO QR-code")
-        win.clear_overlay()
-        win.set_image(result)
-        win.wait_until_closed()
+        show_images([photo1, qr_info, photo2], "Forming BIO QR-code")
 
     return result
 
 
 def form_bio_qr():
     # 1. Получить изображение лица (ИЛ)
-    img_path = "test_images/test" + str(10) + ".jpg"
+    img_path = "test_images/test" + str(12) + ".jpg"
     image = load_image(img_path)
     # 2. Нормализовать размер ИЛ
     image_square = make_square_img(image)
     # 3. Определить координаты половин изображения лица
     # 4. Создать слой-комбинацию из левой половины слоя R и правой слоя G
     rg = generate_layers_combination(image_square)
+    show_images([rg], "RG component")
     # 5. Сгенерировать QR-код со слоями R=комбинация из п. 4, G=QR-код, B=слой B ИЛ
-    qr_result = generate_qr_pip(rg, image_square[:, :, 2])
+    qr_result = generate_qr_pip(rg, image_square[:, :, 2], silent=False)
     return image_square, qr_result
 
 
@@ -221,11 +245,8 @@ def decode_qr_pip(qr_image, silent=True):
     result[:, :, 2] = B
     # 6. Выполнить сведение полученных слоев и сформировать результирующее изображение
     if not silent:
-        win = dlib.image_window()
-        win.set_title("Recreated image")
-        win.clear_overlay()
-        win.set_image(result)
-        win.wait_until_closed()
+        show_images([RG, restoredR, restoredG], "Recreated image")
+        show_images([result], "Recreated image")
     return result
 
 
@@ -346,15 +367,11 @@ def detect_antro_diff(landmarks1, landmarks2):
 
 
 normal_image, qr_image = form_bio_qr()
-restored = decode_qr_pip(qr_image)
+restored = decode_qr_pip(qr_image, silent=False)
 normal_qr = np.concatenate((normal_image, qr_image), axis=1)
 summary = np.concatenate((normal_qr, restored), axis=1)
 # Создаем объект окна dlib
-win = dlib.image_window()
-win.set_title("Result of BIO QR-code decoding")
-win.clear_overlay()
-win.set_image(summary)
-win.wait_until_closed()
+show_images([normal_image, qr_image, restored], "Result of BIO QR-code decoding")
 make_hist(normal_image, restored)
 diff = round(calculate_diff(normal_image, restored), 3)
 print(u'Восстановленное изображение отличается от оригинального на {p}%'.format(p=diff))
@@ -375,4 +392,4 @@ win.set_image(normal_image)
 win.add_overlay(det)
 win.add_overlay(det_rest, color=dlib.rgb_pixel(255, 0, 0))
 win.wait_until_closed()
-dlib.rgb_pixel
+
