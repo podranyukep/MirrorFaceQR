@@ -3,17 +3,25 @@
 
 u"""
 Главный файл программного продукта
+Автор: Екатерина Подранюк
 """
 
 import cv2
 import qrcode
 import numpy as np
 import dlib
+import sys
 from matplotlib import pyplot as plt
 from tabulate import tabulate
 
 
 def show_images(images, title):
+    u"""
+    Отображает изображения из списка, добавляя разделяющую черту
+    :param images: список изображений
+    :param title: заголовок окна
+    :return:
+    """
     # Создаем объект окна dlib
     win = dlib.image_window()
     win.set_title(title)
@@ -154,6 +162,13 @@ def generate_layers_combination(image):
 
 # 5. Сгенерировать QR-код со слоями R=комбинация из п. 4, G=QR-код, B=слой B ИЛ
 def generate_qr_pip(photo1, photo2, silent=True):
+    u"""
+    Генерирует цветной BIO QR-код типа PIP
+    :param photo1: компонента Photo для слоя R
+    :param photo2: компонента Photo для слоя B
+    :param silent: флаг отображения промежуточных результатов
+    :return: сгенерированный BIO QR-код
+    """
     # Изображение к данному моменту уже должно быть квадратным
     M = N = photo1.shape[0]
     # Оставляем запас для границ QR-кода
@@ -185,10 +200,13 @@ def generate_qr_pip(photo1, photo2, silent=True):
     return result
 
 
-def form_bio_qr():
+def form_bio_qr(path_to_image):
+    u"""
+    Сформировать цветной BIO QR-код и подготовить для него входные данные
+    :return: нормализованное ИЛ, сгенерированный код
+    """
     # 1. Получить изображение лица (ИЛ)
-    img_path = "test_images/test" + str(12) + ".jpg"
-    image = load_image(img_path)
+    image = load_image(path_to_image)
     # 2. Нормализовать размер ИЛ
     image_square = make_square_img(image)
     # 3. Определить координаты половин изображения лица
@@ -207,14 +225,14 @@ def recreate_layers_RG(rg_layer):
     :param rg_layer: слой RG (левая часть со значениями R, правая - G)
     :return: восстановленные слои R и G
     """
-    # 2. Сделаем отражение слоя по вертикали
+    # 1. Сделаем отражение слоя по вертикали
     # При вертикальном отражении по оси Y в левой части слоя flipped
     # станет G слой, а в правой - R слой
     flipped = cv2.flip(rg_layer, 1)
-    # 3. Получим данные об индексе середины изображения и его ширине
+    # 2. Получим данные об индексе середины изображения и его ширине
     middle = get_middle_coords(rg_layer)
     width = rg_layer.shape[1]
-    # 4. Выделим половины изображений из слоев
+    # 3. Выделим половины изображений из слоев
     copyR = rg_layer[:, 0:middle]
     copyG = rg_layer[:, middle:width]
     fullR = np.concatenate((copyR, flipped[:, middle:width]), axis=1)
@@ -251,6 +269,12 @@ def decode_qr_pip(qr_image, silent=True):
 
 
 def make_hist(orig, result):
+    u"""
+    Сформировать гистограмму для двух изображений
+    :param orig: оригинальное изображение
+    :param result: изображение-результат вычислений
+    :return:
+    """
     color = ('b', 'g', 'r')
     for i, col in enumerate(color):
         histr = cv2.calcHist([orig], [i], None, [256], [0, 256])
@@ -264,6 +288,13 @@ def make_hist(orig, result):
 
 
 def calculate_diff(orig, result):
+    u"""
+    Рассчитать абсолютную разницу между двумя изображениями
+    (code by Jeru Luke)
+    :param orig: оригинальное изображение
+    :param result: изображение-результат вычислений
+    :return: процентная разница
+    """
     # --- take the absolute difference of the images ---
     res = cv2.absdiff(orig, result)
 
@@ -329,6 +360,13 @@ def find_face_landmarks(face_image, silent=True):
 
 
 def calculate_distance_between_landmarks(first, second):
+    u"""
+    Вычисляет евклидово расстояние между соответствующими
+    антропометрическими точками (АПТ)
+    :param first: первый набор АПТ
+    :param second: второй набор АПТ
+    :return: сумма евклидовых расстояний
+    """
     length = len(first)
     dist = 0
     for i in range(0, length):
@@ -339,6 +377,11 @@ def calculate_distance_between_landmarks(first, second):
 
 
 def calculate_antro(landmarks):
+    u"""
+    Расчитывает основные антропометрические характеристики лица
+    :param landmarks: набор АПТ
+    :return: значение антропометрических характеристик
+    """
     lm = {
         'x': [point.x for point in landmarks],
         'y': [point.y for point in landmarks]
@@ -356,6 +399,13 @@ def calculate_antro(landmarks):
 
 
 def detect_antro_diff(landmarks1, landmarks2):
+    u"""
+    Вычислить разницу между антропометрическими характеристиками
+    двух различных наборов АПТ
+    :param landmarks1: первый набор АПТ
+    :param landmarks2: второй набор АПТ
+    :return:
+    """
     face1 = calculate_antro(landmarks1)
     face2 = calculate_antro(landmarks2)
     diff_dict = {}
@@ -366,30 +416,53 @@ def detect_antro_diff(landmarks1, landmarks2):
     return diff_dict
 
 
-normal_image, qr_image = form_bio_qr()
+# Получаем путь к исходному ИЛ
+if len(sys.argv) > 1:
+    img_path = sys.argv[1]
+else:
+    img_path = "test_images/test" + str(12) + ".jpg"
+
+# Генерируем цветной BIO QR-код
+normal_image, qr_image = form_bio_qr(img_path)
+
+# Реконструируем ИЛ на основе сформированного кода
 restored = decode_qr_pip(qr_image, silent=False)
 normal_qr = np.concatenate((normal_image, qr_image), axis=1)
 summary = np.concatenate((normal_qr, restored), axis=1)
-# Создаем объект окна dlib
+
+# Отображаем результат
 show_images([normal_image, qr_image, restored], "Result of BIO QR-code decoding")
+
+# Отображаем гистограмму для оригинального и восстановленного изображения
 make_hist(normal_image, restored)
+
+# Расчитываем абсолютную разницу между изображениями
 diff = round(calculate_diff(normal_image, restored), 3)
-print(u'Восстановленное изображение отличается от оригинального на {p}%'.format(p=diff))
+print(u'Восстановленное изображение отличается от оригинального '
+      u'на {p}%'.format(p=diff))
+
+# Выполняем расчет и анализ антропометрических характеристик для
+# исходного и реконструированного ИЛ
 points, det = find_face_landmarks(normal_image)
 points_rest, det_rest = find_face_landmarks(restored)
-sum_distance = round(calculate_distance_between_landmarks(points, points_rest), 3)
-print(u'Сумма Евклидовых расстояний между антропометрическими точками: {s}'.format(s=sum_distance))
+sum_distance = round(calculate_distance_between_landmarks(points, points_rest),
+                     3)
+print(u'Сумма Евклидовых расстояний между антропометрическими точками: '
+      u'{s}'.format(s=sum_distance))
 diff = detect_antro_diff(points, points_rest)
 columns = [u'Высота лица', u'Ширина лица', u'Ширина глазной щели', u'Ширина носа',
            u'Ширина губ', u'Высота носа', u'Высота от нижней губы до верхней']
 rows = [u'Оригинал', u'Восстановленное', u'Разница', u'Разница %']
 print(tabulate(diff, headers=columns, showindex=rows))
+# Отображаем полученную антропометрику на исходном ИЛ для сравнения
 # Создаем объект окна dlib
 win = dlib.image_window()
-win.set_title("Finding face landmarks")
+win.set_title("Face landmarks")
 win.clear_overlay()
 win.set_image(normal_image)
+# Исходные АПТ - синим цветом
 win.add_overlay(det)
+# АПТ реконструированного лица - красным цветом
 win.add_overlay(det_rest, color=dlib.rgb_pixel(255, 0, 0))
 win.wait_until_closed()
 
